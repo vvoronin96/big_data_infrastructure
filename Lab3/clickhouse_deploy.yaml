@@ -1,0 +1,384 @@
+-‒
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: vvoronin-306285
+  name: zookeeper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      volumes:
+        - name: nfs-home-storage
+          persistentVolumeClaim:
+            claimName: pvc-vvoronin-306285
+            readOnly: false
+      containers:
+      - name: zookeeper
+        image: node03.st:5000/zookeeper:vvoronin-306285
+        imagePullPolicy: IfNotPresent
+        ports:
+          - containerPort: 2181  # ZK client
+          - containerPort: 2888  # Follower
+          - containerPort: 3888  # Election
+          - containerPort: 8080  # AdminServer
+        volumeMounts:
+          - mountPath: "/nfs-home"
+            name: nfs-home-storage
+            readOnly: false
+          - mountPath: "/data"          # Zookeeper data dir
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/zookeeper/data"
+          - mountPath: "/conf"          # Zookeeper config dir
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/zookeeper/conf"
+          - mountPath: "/datalog"       # Zookeeper datalog dir
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/zookeeper/datalog"
+          - mountPath: "/log"           # Zookeeper log dir
+	 name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/zookeeper/log"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: vvoronin-306285
+spec:
+  type: NodePort
+  ports:
+    - port: 2181
+      protocol: TCP
+      name: client
+    - port: 8080
+      protocol: TCP
+      name: admin-server
+  selector:
+    app: zookeeper
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: vvoronin-306285
+  name: clickhouse-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse-1
+  template:
+    metadata:
+      labels:
+        app: clickhouse-1
+    spec:
+      hostname: clickhouse-1
+      volumes:
+        - name: shared-storage
+          persistentVolumeClaim:
+            claimName: pvc-shared-vvoronin-306285
+            readOnly: true
+        - name: nfs-home-storage
+          persistentVolumeClaim:
+            claimName: pvc-vvoronin-306285
+            readOnly: false
+      containers:
+      - name: clickhouse
+        image: node03.st:5000/clickhouse-server:vvoronin-306285
+        imagePullPolicy: IfNotPresent
+        ports:
+          - containerPort: 8123  # HTTP Client
+          - containerPort: 9000  # TCP Native Client
+          - containerPort: 9009  # Inter-Server Replication
+        env:
+          - name: CLICKHOUSE_DO_NOT_CHOWN
+            value: '1'
+        volumeMounts:
+          - mountPath: "/shared-data"
+            name: shared-storage
+            readOnly: true
+
+          - mountPath: "/nfs-home"
+            name: nfs-home-storage
+            readOnly: false
+
+          # ClickHouse data dir
+          - mountPath: "/var/lib/clickhouse"
+            name: nfs-home-storage
+            readOnly: false
+            # Subpath in mounted PVC
+            subPath: "apps_data/clickhouse/clickhouse-1/data"
+
+ # ClickHouse server own settings dir
+          - mountPath: "/etc/clickhouse-server/config.d"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/clickhouse-1/config.d"
+
+          # ClickHouse common server settings file
+          - mountPath: "/etc/clickhouse-server/config.xml"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/common/config.xml"
+
+          # ClickHouse server own users dir
+          - mountPath: "/etc/clickhouse-server/users.d"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/clickhouse-1/users.d"
+
+          # ClickHouse common server users file
+          - mountPath: "/etc/clickhouse-server/users.xml"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/common/users.xml"
+
+          # ClickHouse logs dir
+          - mountPath: "/var/log/clickhouse-server"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/clickhouse-1/logs"
+
+          # Queries history for client
+          - mountPath: "/.clickhouse-client-history"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/common/.clickhouse-client-history"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-1
+  namespace: vvoronin-306285
+spec:
+  type: NodePort
+  ports:
+    - port: 8123
+      protocol: TCP
+      name: http
+    - port: 9000
+      protocol: TCP
+      name: native
+  selector:
+    app: clickhouse-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: vvoronin-306285
+  name: clickhouse-2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse-2
+  template:
+    metadata:
+      labels:
+        app: clickhouse-2
+    spec:
+      hostname: clickhouse-2
+      volumes:
+        - name: shared-storage
+          persistentVolumeClaim:
+            claimName: pvc-shared-vvoronin-306285
+            readOnly: true
+        - name: nfs-home-storage
+          persistentVolumeClaim:
+            claimName: pvc-vvoronin-306285
+            readOnly: false
+      containers:
+      - name: clickhouse
+        image: node03.st:5000/clickhouse-server:vvoronin-306285
+        imagePullPolicy: IfNotPresent
+        ports:
+          - containerPort: 8123
+          - containerPort: 9000
+          - containerPort: 9009
+        env:
+          - name: CLICKHOUSE_DO_NOT_CHOWN
+            value: '1'
+        volumeMounts:
+          - mountPath: "/shared-data"
+            name: shared-storage
+            readOnly: true
+
+          - mountPath: "/nfs-home"
+	 name: nfs-home-storage
+            readOnly: false
+
+          # ClickHouse data dir
+          - mountPath: "/var/lib/clickhouse"
+            name: nfs-home-storage
+            readOnly: false
+            # Subpath in mounted PVC
+            subPath: "apps_data/clickhouse/clickhouse-2/data"
+
+          # ClickHouse server own settings dir
+          - mountPath: "/etc/clickhouse-server/config.d"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/clickhouse-1/config.d"
+
+          # ClickHouse common server settings file
+          - mountPath: "/etc/clickhouse-server/config.xml"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/common/config.xml"
+
+          # ClickHouse server own users dir
+          - mountPath: "/etc/clickhouse-server/users.d"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/clickhouse-2/users.d"
+
+          # ClickHouse common server users file
+          - mountPath: "/etc/clickhouse-server/users.xml"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/common/users.xml"
+
+          # ClickHouse logs dir
+          - mountPath: "/var/log/clickhouse-server"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/clickhouse-2/logs"
+
+          # Queries history for client
+          - mountPath: "/.clickhouse-client-history"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/common/.clickhouse-client-history"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-2
+  namespace: vvoronin-306285
+spec:
+  type: NodePort
+  ports:
+    - port: 8123
+      protocol: TCP
+      name: http
+    - port: 9000
+      protocol: TCP
+      name: native
+  selector:
+    app: clickhouse-2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: vvoronin-306285
+  name: clickhouse-3
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse-3
+  template:
+    metadata:
+      labels:
+        app: clickhouse-3
+    spec:
+      hostname: clickhouse-3
+      volumes:
+        - name: shared-storage
+          persistentVolumeClaim:
+            claimName: pvc-shared-vvoronin-306285
+            readOnly: true
+        - name: nfs-home-storage
+          persistentVolumeClaim:
+            claimName: pvc-vvoronin-306285
+            readOnly: false
+      containers:
+      - name: clickhouse
+        image: node03.st:5000/clickhouse-server:vvoronin-306285
+        imagePullPolicy: IfNotPresent
+        ports:
+          - containerPort: 8123
+          - containerPort: 9000
+          - containerPort: 9009
+        env:
+          - name: CLICKHOUSE_DO_NOT_CHOWN
+            value: '1'
+        volumeMounts:
+          - mountPath: "/shared-data"
+            name: shared-storage
+            readOnly: true
+
+          - mountPath: "/nfs-home"
+            name: nfs-home-storage
+            readOnly: false
+
+          # ClickHouse data dir
+          - mountPath: "/var/lib/clickhouse"
+            name: nfs-home-storage
+            readOnly: false
+            # Subpath in mounted PVC
+            subPath: "apps_data/clickhouse/clickhouse-3/data"
+
+          # ClickHouse server own settings dir
+          - mountPath: "/etc/clickhouse-server/config.d"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/clickhouse-3/config.d"
+
+          # ClickHouse common server settings file
+          - mountPath: "/etc/clickhouse-server/config.xml"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/common/config.xml"
+
+          # ClickHouse server own users dir
+          - mountPath: "/etc/clickhouse-server/users.d"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/clickhouse-3/users.d"
+
+          # ClickHouse common server users file
+          - mountPath: "/etc/clickhouse-server/users.xml"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/common/users.xml"
+
+          # ClickHouse logs dir
+          - mountPath: "/var/log/clickhouse-server"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/clickhouse-3/logs"
+
+          # Queries history for client
+          - mountPath: "/.clickhouse-client-history"
+            name: nfs-home-storage
+            readOnly: false
+            subPath: "apps_data/clickhouse/common/.clickhouse-client-history"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse-3
+  namespace: vvoronin-306285
+spec:
+  type: NodePort
+  ports:
+    - port: 8123
+      protocol: TCP
+      name: http
+    - port: 9000
+      protocol: TCP
+      name: native
+  selector:
+    app: clickhouse-3
+

@@ -1,0 +1,52 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lab-1-antonov
+  namespace: aantonov-310006
+  labels:
+    app: lab-1-antonov
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lab-1-antonov
+  template:
+    metadata:
+      labels:
+        app: lab-1-antonov
+    spec:
+      volumes:
+        - name: lab-1-antonov-volume
+          hostPath:
+            path: /nfs/shared
+      containers:
+      - name: lab-1-antonov-container
+        image: node03.st:5000/pyspark-jupyter:1.0
+        imagePullPolicy: IfNotPresent
+        command: [ "start-notebook.sh" ]
+        args: [ "--NotebookApp.token=''" ]
+        ports:
+        - containerPort: 8888
+          name: jupyter
+        - containerPort: 4040
+          name: spark
+        volumeMounts:
+          - mountPath: "/home/jovyan/datasets"
+            name: lab-1-antonov-volume
+            readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lab-1-antonov-service
+  namespace: aantonov-310006
+spec:
+  type: NodePort
+  ports:
+  - port: 8888
+    name: jupyter
+  - port: 4040
+    name: spark-ui
+  selector:
+    app: lab-1-antonov
